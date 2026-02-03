@@ -4,8 +4,8 @@ A modern, native Windows client for Home Assistant that lives in your system tra
 
 I built this because I wanted a faster, more elegant way to control my smart home without opening a browser tab. It features a sleek dashboard with fluid animations, drag-and-drop customization, and deep integration with Home Assistant entities.
 
-![Main Interface](docs/images/dashboard-main.png)
-*The main dashboard view showing light controls, climate widgets, and power sensors.*
+<img width="439" height="399" alt="prismdesktop" src="https://github.com/user-attachments/assets/bfb576a4-d65f-4f3f-a9da-e5e26f89e404" />
+
 
 ## Features
 
@@ -14,6 +14,10 @@ I built this because I wanted a faster, more elegant way to control my smart hom
 - **Drag & Drop Customization**: Rearrange your dashboard grid simply by dragging icons around.
 - **Real-time Sync**: Uses Home Assistant's WebSocket API for instant state updates.
 - **Customizable Appearance**: Choose from different border effects (like Rainbow or Aurora) and customize button colors.
+
+## How to use (lights)
+- click on light to toggle
+- hold light to open dimmer
 
 ## Installation
 
@@ -41,8 +45,8 @@ If you want to modify the code or run it manually:
 
 Upon first launch, you will be asked for your Home Assistant URL and a Long-Lived Access Token. You can generate this token in your Home Assistant profile settings.
 
-![Settings Menu](docs/images/settings-menu.png)
-*The settings panel for configuring connection details and UI preferences.*
+<img width="429" height="691" alt="image" src="https://github.com/user-attachments/assets/a8a2a005-cda2-4068-80e8-25643924a8ed" />
+
 
 ## Building
 
