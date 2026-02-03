@@ -6,32 +6,37 @@ Embedded Button Editor Widget
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
     QLineEdit, QPushButton, QComboBox, QFormLayout,
-    QCheckBox
+    QCheckBox, QSpinBox
 )
 from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QColor, QFont
 
 class ButtonEditWidget(QWidget):
     """
-    Widget for editing button configuration directly in the dashboard.
-    Matches SettingsWidgetV2 style.
+    Editor for configuring button properties.
+    Uses the same design style as SettingsWidgetV2.
     """
     
     saved = pyqtSignal(dict)
     cancelled = pyqtSignal()
     
-    def __init__(self, entities: list, config: dict = None, slot: int = 0, theme_manager=None, parent=None):
+    def __init__(self, entities: list, config: dict = None, slot: int = 0, theme_manager=None, input_manager=None, parent=None):
         super().__init__(parent)
         self.entities = entities or []
         self.config = config or {}
         self.slot = slot
         self.theme_manager = theme_manager
+        self.input_manager = input_manager
+        
+        # Connect input manager if available
+        if self.input_manager:
+            self.input_manager.recorded.connect(self.on_shortcut_recorded)
         
         self.setup_ui()
         self.load_config()
     
     def _update_stylesheet(self):
-        """Generate and apply theme-aware stylesheet."""
+        """Update the stylesheet matching the active theme."""
         if self.theme_manager:
             colors = self.theme_manager.get_colors()
         else:
@@ -46,7 +51,7 @@ class ButtonEditWidget(QWidget):
                 'accent': '#007aff',
             }
         
-        # Determine if we're in light mode for input styling
+        # Check if using light or dark text to determine background contrast
         is_light = colors.get('text', '#ffffff') == '#1e1e1e'
         
         # Input backgrounds: slightly darker/lighter than base
@@ -81,7 +86,7 @@ class ButtonEditWidget(QWidget):
                 margin-top: 10px;
                 margin-bottom: 2px;
             }}
-            QLineEdit, QComboBox {{
+            QLineEdit, QComboBox, QSpinBox {{
                 background-color: {input_bg};
                 border: 1px solid {input_border};
                 border-radius: 6px;
@@ -95,7 +100,7 @@ class ButtonEditWidget(QWidget):
                 color: {colors['text']};
                 selection-background-color: {colors['accent']};
             }}
-            QLineEdit:focus, QComboBox:focus {{
+            QLineEdit:focus, QComboBox:focus, QSpinBox:focus {{
                 border: 1px solid {colors['accent']};
                 background-color: {input_focus_bg};
             }}
@@ -124,13 +129,30 @@ class ButtonEditWidget(QWidget):
             QPushButton#colorBtn:checked {{
                 border: 2px solid {color_btn_border};
             }}
+            
+            QPushButton#recordBtn {{
+                background-color: #EA4335;
+                border: none;
+                border-radius: 6px;
+            }}
+            QPushButton#recordBtn:hover {{
+                background-color: #D33428;
+            }}
+            QPushButton#recordBtn:checked {{
+                background-color: #B71C1C;
+            }}
+            
+            QWidget#recordIcon {{
+                background-color: white;
+                border-radius: 6px;
+            }}
         """)
         
     def setup_ui(self):
-        # Apply dynamic theming
+        # Update styling
         self._update_stylesheet()
         
-        # Connect theme changes for live updates
+        # Listen for theme changes
         if self.theme_manager:
             self.theme_manager.theme_changed.connect(self._update_stylesheet)
 
@@ -178,7 +200,7 @@ class ButtonEditWidget(QWidget):
         self.form.addRow("Label:", self.label_input)
         
         self.type_combo = QComboBox()
-        self.type_combo.addItems(["Switch", "Sensor Widget", "Climate", "Curtain", "Script"])
+        self.type_combo.addItems(["Light / Switch", "Sensor Widget", "Climate", "Curtain", "Script", "Scene"])
         self.type_combo.currentIndexChanged.connect(self.on_type_changed)
         self.form.addRow("Type:", self.type_combo)
         
@@ -195,6 +217,13 @@ class ButtonEditWidget(QWidget):
         self.advanced_mode_check.setToolTip("Enable fan and mode controls")
         self.advanced_mode_check.setVisible(False)
         self.form.addRow("", self.advanced_mode_check)
+        
+        # Precision (Widget/Sensor Only)
+        self.precision_spin = QSpinBox()
+        self.precision_spin.setRange(0, 5)
+        self.precision_spin.setToolTip("Decimal places")
+        self.precision_spin.setVisible(False)
+        self.form.addRow("Decimals:", self.precision_spin)
         
         # Service (Switches only)
         self.service_label = QLabel("Service:")
@@ -244,6 +273,44 @@ class ButtonEditWidget(QWidget):
         color_layout.addStretch()
         self.form.addRow("Color:", color_widget)
         
+        # --- Shortcut Section ---
+        self._add_section_header("SHORTCUT")
+        
+        self.custom_shortcut_check = QCheckBox("Enable Custom Shortcut")
+        self.custom_shortcut_check.toggled.connect(self.on_custom_shortcut_toggled)
+        self.form.addRow("", self.custom_shortcut_check)
+        
+        shortcut_row = QHBoxLayout()
+        self.shortcut_display = QLineEdit()
+        self.shortcut_display.setReadOnly(True)
+        self.shortcut_display.setPlaceholderText("None")
+        
+        self.record_btn = QPushButton()
+        self.record_btn.setObjectName("recordBtn")
+        self.record_btn.setCheckable(True)
+        self.record_btn.setFixedSize(40, 32)
+        self.record_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.record_btn.clicked.connect(self.toggle_recording)
+        
+        # Inner Icon Widget
+        btn_layout = QHBoxLayout(self.record_btn)
+        btn_layout.setContentsMargins(0,0,0,0)
+        btn_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        self.record_icon = QWidget()
+        self.record_icon.setObjectName("recordIcon")
+        self.record_icon.setFixedSize(12, 12)
+        self.record_icon.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        btn_layout.addWidget(self.record_icon)
+        
+        # Add to row
+        shortcut_row.addWidget(self.shortcut_display, 8)
+        shortcut_row.addSpacing(12)
+        shortcut_row.addWidget(self.record_btn)
+        shortcut_row.addStretch(2) 
+        
+        self.form.addRow("Keys:", shortcut_row)
+        
         layout.addLayout(self.form)
 
     def _add_section_header(self, text):
@@ -252,8 +319,8 @@ class ButtonEditWidget(QWidget):
         self.form.addRow(lbl)
 
     def populate_entities(self):
-        """Populate entity dropdown filtered by selected type."""
-        # Save current selection to restore if possible
+        """Fill entity dropdown based on the selected button type."""
+        # Save current selection to restore it later
         current_entity = self.entity_combo.currentText()
         
         self.entity_combo.clear()
@@ -271,6 +338,8 @@ class ButtonEditWidget(QWidget):
             allowed_domains = {'cover'}
         elif type_idx == 4:  # Script
             allowed_domains = {'script'}
+        elif type_idx == 5:  # Scene
+            allowed_domains = {'scene'}
         else:
             allowed_domains = None  # Show all
         
@@ -301,12 +370,26 @@ class ButtonEditWidget(QWidget):
                 self.entity_combo.setCurrentIndex(idx)
 
     def on_type_changed(self, index):
-        is_switch = (index == 0)
-        is_climate = (index == 2)
+        types = ["switch", "widget", "climate", "curtain", "script", "scene"]
+        current_type = types[index]
+
+        # Show/Hide fields based on type
+        self.advanced_mode_check.setVisible(current_type == 'climate')
+        self.service_combo.setVisible(current_type == 'switch')
+        self.service_label.setVisible(current_type == 'switch')
         
-        self.service_label.setVisible(is_switch)
-        self.service_combo.setVisible(is_switch)
-        self.advanced_mode_check.setVisible(is_climate)
+        # Show precision for widget/sensor
+        is_sensor = current_type == 'widget'
+        self.precision_spin.setVisible(is_sensor)
+        
+        # Find the label associated with the widget and hide it too.
+        # Layouts don't automatically hide labels for hidden widgets.
+        # Simple hack: iterate rows regarding precision
+        if self.form.labelForField(self.precision_spin):
+             self.form.labelForField(self.precision_spin).setVisible(is_sensor)
+             
+        if self.form.labelForField(self.service_combo):
+             self.form.labelForField(self.service_combo).setVisible(current_type == 'switch')
         
         # Refresh entity list for the new type
         self.populate_entities()
@@ -330,7 +413,7 @@ class ButtonEditWidget(QWidget):
         self.label_input.setText(self.config.get('label', ''))
         self.icon_input.setText(self.config.get('icon', ''))
         
-        types = {'switch': 0, 'widget': 1, 'climate': 2, 'curtain': 3, 'script': 4}
+        types = {'switch': 0, 'widget': 1, 'climate': 2, 'curtain': 3, 'script': 4, 'scene': 5}
         self.type_combo.setCurrentIndex(types.get(self.config.get('type'), 0))
         
         eid = self.config.get('entity_id', '')
@@ -347,7 +430,18 @@ class ButtonEditWidget(QWidget):
         
         self.advanced_mode_check.setChecked(self.config.get('advanced_mode', False))
         
+        self.advanced_mode_check.setChecked(self.config.get('advanced_mode', False))
+        
+        # Precision
+        self.precision_spin.setValue(self.config.get('precision', 1))
+        
         self.select_color(self.config.get('color', '#4285F4'))
+        
+        # Shortcut
+        shortcut = self.config.get('custom_shortcut', {})
+        self.custom_shortcut_check.setChecked(shortcut.get('enabled', False))
+        self.shortcut_display.setText(shortcut.get('value', ''))
+        self.on_custom_shortcut_toggled(shortcut.get('enabled', False))
         
     def get_content_height(self):
         # Force layout update to get accurate size after content changes
@@ -355,30 +449,75 @@ class ButtonEditWidget(QWidget):
         return self.sizeHint().height()
 
     def save(self):
+        """Save changes and emit config."""
         entity_id = self.entity_combo.currentText().strip()
         type_idx = self.type_combo.currentIndex()
         
-        btn_type = 'switch'
-        if type_idx == 1: btn_type = 'widget'
-        elif type_idx == 2: btn_type = 'climate'
-        elif type_idx == 3: btn_type = 'curtain'
-        elif type_idx == 4: btn_type = 'script'
+        new_config = self.config.copy() if self.config else {}
+        new_config['slot'] = self.slot
+        new_config['label'] = self.label_input.text().strip()
         
-        domain = entity_id.split('.')[0] if '.' in entity_id else 'homeassistant'
-        svc_action = self.service_combo.currentText()
+        types = ["switch", "widget", "climate", "curtain", "script", "scene"]
+        new_config['type'] = types[self.type_combo.currentIndex()]
         
-        new_config = {
-            'slot': self.slot,
-            'label': self.label_input.text().strip() or entity_id,
-            'type': btn_type,
-            'entity_id': entity_id,
-            'color': self.selected_color,
-            'icon': self.icon_input.text().strip()
-        }
+        # Extract ID from entity_id (e.g., "light.kitchen_light (Kitchen Light)" -> "light.kitchen_light")
+        entity_text = self.entity_combo.currentText()
+        new_config['entity_id'] = entity_text.split(" ")[0] if entity_text else ""
         
-        if btn_type == 'switch':
-            new_config['service'] = f"{domain}.{svc_action}"
-        elif btn_type == 'climate':
+        if new_config['type'] == 'climate':
             new_config['advanced_mode'] = self.advanced_mode_check.isChecked()
             
+        if new_config['type'] == 'switch':
+             new_config['service'] = f"{new_config['entity_id'].split('.')[0]}.{self.service_combo.currentText()}"
+        
+        if new_config['type'] == 'widget':
+            new_config['precision'] = self.precision_spin.value()
+             
+        new_config['icon'] = self.icon_input.text().strip()
+        new_config['color'] = self.selected_color
+        
+        # Save shortcut
+        new_config['custom_shortcut'] = {
+            'enabled': self.custom_shortcut_check.isChecked(),
+            'value': self.shortcut_display.text()
+        }
+        
         self.saved.emit(new_config)
+
+    def on_custom_shortcut_toggled(self, checked):
+        self.record_btn.setEnabled(checked)
+        self.shortcut_display.setEnabled(checked)
+        if not checked:
+             self.record_btn.setChecked(False)
+             if self.input_manager:
+                 self.input_manager.stop_listening()
+                 self.record_icon.setStyleSheet("background-color: white; border-radius: 6px;")
+
+    def toggle_recording(self, checked):
+        if not self.input_manager:
+            self.record_btn.setChecked(False)
+            return
+            
+        if checked:
+            # Stop State (Square)
+            self.record_icon.setStyleSheet("background-color: white; border-radius: 2px;") 
+            self.shortcut_display.setText("Press keys...")
+            self.input_manager.start_recording()
+        else:
+            # Record State (Circle)
+            self.record_icon.setStyleSheet("background-color: white; border-radius: 6px;")
+            self.input_manager.stop_listening()
+            # Restore if empty
+            if self.shortcut_display.text() == "Press keys...":
+                 sc = self.config.get('custom_shortcut', {}) if self.config else {}
+                 self.shortcut_display.setText(sc.get('value', ''))
+
+    @pyqtSlot(dict)
+    def on_shortcut_recorded(self, shortcut):
+        if not self.record_btn.isChecked():
+            return # Ignore if we aren't recording
+            
+        self.record_btn.setChecked(False)
+        # Reset Icon
+        self.record_icon.setStyleSheet("background-color: white; border-radius: 6px;")
+        self.shortcut_display.setText(shortcut.get('value', ''))

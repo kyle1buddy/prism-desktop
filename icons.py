@@ -100,6 +100,8 @@ class Icons:
     
     # Scripts
     SCRIPT = "\U000F0488"              # mdi-script-text-outline
+    PALETTE_OUTLINE = "\U000F0E0C"     # mdi-palette-outline (Corrected)
+    SCENE_THEME = PALETTE_OUTLINE      # Default scene icon
     
     # Empty/placeholder
     CIRCLE_OUTLINE = "\U000F0766"      # mdi-circle-outline

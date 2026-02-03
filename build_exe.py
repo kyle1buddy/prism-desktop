@@ -52,7 +52,7 @@ def build():
     
     print("\nBuild complete!")
     print(f"Executable is at: {dist_dir / 'PrismDesktop.exe'}")
-    print("Note: The 'config.json' will be created in the same folder as the exe when you run it.")
+    print("Note: Configuration is stored in %APPDATA%/PrismDesktop/config.json")
 
 if __name__ == "__main__":
     build()

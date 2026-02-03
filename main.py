@@ -24,6 +24,7 @@ from notifications import NotificationManager
 from input_manager import InputManager
 from icons import load_mdi_font
 
+VERSION = "1.1"
 
 class ServiceCallSignals(QObject):
     """Signals for ServiceCallRunnable."""
@@ -31,7 +32,7 @@ class ServiceCallSignals(QObject):
 
 
 class ServiceCallRunnable(QRunnable):
-    """Background runnable for calling HA services."""
+    """Executes Home Assistant service calls in a background thread."""
     
     def __init__(self, client: HAClient, domain: str, service: str, entity_id: str, data: dict = None):
         super().__init__()
@@ -45,7 +46,7 @@ class ServiceCallRunnable(QRunnable):
     def run(self):
         """Call the service in background."""
         try:
-            # Use the shared client (thread-safe enough for requests.Session)
+            # Use the shared client which is thread-safe for requests
             result = self.client.call_service(
                 self.domain, self.service, self.entity_id, self.data
             )
@@ -56,7 +57,7 @@ class ServiceCallRunnable(QRunnable):
 
 
 class StateFetchThread(QThread):
-    """Background thread for fetching entity states (values)."""
+    """Fetches entity states in a background thread."""
     
     state_fetched = pyqtSignal(str, dict)
     
@@ -107,16 +108,16 @@ class PrismDesktopApp(QObject):
         self._ha_websocket: Optional[HAWebSocket] = None
         self._ws_thread: Optional[WebSocketThread] = None
         
-        # Background threads - keep references to prevent GC
+        # Background threads - referenced to prevent garbage collection
         self._fetch_thread: Optional[StateFetchThread] = None
         self._entity_list_thread: Optional[EntityFetchThread] = None # For editor
         
         # Cache for entity list (for editor)
         self._available_entities: list[dict] = []
         
-        # Debounce tracking - prevent rapid clicks
+        # Debounce tracking
         self._last_click_time: dict[str, float] = {}  # entity_id -> timestamp
-        self._click_cooldown = 0.5  # seconds between clicks for same entity
+        self._click_cooldown = 0.5
         
         # Initialize
         self.init_theme()
@@ -143,7 +144,7 @@ class PrismDesktopApp(QObject):
         return {
             "home_assistant": {"url": "", "token": ""},
             "appearance": {"theme": "system", "rows": 2},
-            "shortcut": {"type": "keyboard", "value": "<ctrl>+<alt>+h"},
+            "shortcut": {"type": "keyboard", "value": "<ctrl>+<alt>+h", "modifier": "Alt"},
             "buttons": []
         }
     
@@ -172,7 +173,7 @@ class PrismDesktopApp(QObject):
         """Initialize UI components."""
         # Create dashboard
         rows = self.config.get('appearance', {}).get('rows', 2)
-        self.dashboard = Dashboard(config=self.config, theme_manager=self.theme_manager, rows=rows)
+        self.dashboard = Dashboard(config=self.config, theme_manager=self.theme_manager, input_manager=self.input_manager, version=VERSION, rows=rows)
         self.dashboard.set_buttons(self.config.get('buttons', []), self.config.get('appearance', {}))
         
         # Connect signals
@@ -414,11 +415,15 @@ class PrismDesktopApp(QObject):
         print("Embedded settings saved")
         
         # Check what changed
-        old_ha_config = self.config.get('home_assistant', {})
+        # Check what changed
+        # compare against ACTIVE ha_client state, because self.config might be mutated in place
         new_ha_config = new_config.get('home_assistant', {})
+        new_url = new_ha_config.get('url', '').rstrip('/')
+        new_token = new_ha_config.get('token', '')
         
-        ha_changed = (old_ha_config.get('url') != new_ha_config.get('url') or 
-                      old_ha_config.get('token') != new_ha_config.get('token'))
+        # Check against current client state
+        ha_changed = (self.ha_client.url != new_url or 
+                      self.ha_client.token != new_token)
         
         # Update config
         self.config = new_config
@@ -470,13 +475,13 @@ class PrismDesktopApp(QObject):
             self.stop_websocket(on_finished=self.start_websocket)
 
     @pyqtSlot(dict)
-    def on_button_clicked(self, config: dict):
-        """Handle dashboard button click."""
+    def on_button_clicked(self, config):
+        """Handle button click from dashboard."""
         btn_type = config.get('type', 'switch')
         entity_id = config.get('entity_id', '')
         
-        # Handle switch, curtain, and script types
-        if btn_type in ('switch', 'curtain', 'script') and entity_id:
+        # Handle switch, curtain, script, and scene types
+        if btn_type in ('switch', 'curtain', 'script', 'scene') and entity_id:
             # Debounce check - prevent rapid clicks
             current_time = time.time()
             last_time = self._last_click_time.get(entity_id, 0)
@@ -498,6 +503,10 @@ class PrismDesktopApp(QObject):
             elif btn_type == 'script':
                 # Scripts use script.turn_on
                 domain = 'script'
+                action = 'turn_on'
+            elif btn_type == 'scene':
+                # Scenes always call turn_on
+                domain = 'scene'
                 action = 'turn_on'
             else:
                 # Switches use configured service
@@ -678,7 +687,7 @@ class PrismDesktopApp(QObject):
         print(f"WebSocket error: {error}")
     
     def fetch_initial_states(self):
-        """Fetch initial states for all configured entities."""
+        """Fetch states for all configured entities."""
         # Stop any existing fetch thread first
         self.stop_fetch_thread()
         
@@ -716,10 +725,19 @@ class PrismDesktopApp(QObject):
         print("Initial state fetch complete")
     
     def check_first_run(self):
-        """Check if this is first run and show settings if needed."""
+        """Show settings if no configuration exists."""
         ha_config = self.config.get('home_assistant', {})
         if not ha_config.get('url') or not ha_config.get('token'):
             QTimer.singleShot(500, self._show_settings)
+
+    def shutdown(self):
+        """Clean shutdown of threads and connections."""
+        print("Shutting down...")
+        if self._ws_thread:
+            self._ws_thread.stop()
+            self._ws_thread.wait(1000)
+        if hasattr(self, 'update_checker') and self.update_checker.isRunning():
+            self.update_checker.wait()
 
 def main():
     """Application entry point."""
@@ -736,6 +754,10 @@ def main():
         sys.exit(1)
     
     prism = PrismDesktopApp()
+    
+    # Ensure clean shutdown
+    app.aboutToQuit.connect(prism.shutdown)
+    
     prism.check_first_run()
     
     sys.exit(app.exec())

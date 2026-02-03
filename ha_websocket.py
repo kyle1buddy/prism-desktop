@@ -1,6 +1,6 @@
 """
-Home Assistant WebSocket Client for Prism Desktop
-Handles real-time state updates and notifications via WebSocket.
+Home Assistant WebSocket Client
+Handles real-time state updates and notifications.
 """
 
 import asyncio
@@ -53,7 +53,7 @@ class HAWebSocket(QObject):
         return self._message_id
     
     def request_stop(self):
-        """Request the websocket to stop (thread-safe)."""
+        """Thread-safe stop request."""
         self._running = False
     
     async def _send(self, data: dict):
@@ -151,7 +151,7 @@ class HAWebSocket(QObject):
                 break
     
     async def _handle_message(self, data: dict):
-        """Handle incoming WebSocket message."""
+        """Handle incoming message."""
         msg_type = data.get('type', '')
         
         if msg_type == 'event':
@@ -239,6 +239,14 @@ class WebSocketThread(QThread):
             pass
         finally:
             try:
+                # Clean up pending tasks to avoid "Task destroyed but pending" warnings
+                pending = asyncio.all_tasks(self._loop)
+                for task in pending:
+                    task.cancel()
+                    
+                if pending:
+                    self._loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                
                 self._loop.close()
             except:
                 pass

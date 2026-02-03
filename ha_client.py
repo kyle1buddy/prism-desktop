@@ -1,6 +1,6 @@
 """
-Home Assistant REST API Client for Prism Desktop (Synchronous)
-Handles all HTTP communication with Home Assistant using requests.
+Home Assistant REST API Client (Synchronous)
+Handles HTTP requests to Home Assistant.
 """
 
 import requests
@@ -26,7 +26,7 @@ class HAClient:
     
     @property
     def headers(self) -> dict:
-        """Get authorization headers."""
+        """Return authorization headers."""
         return {
             "Authorization": f"Bearer {self.token}",
             "Content-Type": "application/json"
@@ -70,8 +70,8 @@ class HAClient:
     
     def get_entities(self) -> list[dict]:
         """
-        Fetch all entities from Home Assistant.
-        Returns list of entity state objects.
+        Fetch all entities.
+        Returns list of state objects.
         """
         try:
             session = self._get_session()
@@ -110,7 +110,7 @@ class HAClient:
         data: Optional[dict] = None
     ) -> bool:
         """
-        Call a Home Assistant service.
+        Call a service.
         Returns True if successful.
         """
         try:

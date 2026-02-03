@@ -29,7 +29,7 @@ MIME_TYPE = "application/x-hatray-slot"
 
 
 class DashboardButton(QFrame):
-    """Individual button/widget in the dashboard grid."""
+    """Button or widget in the grid."""
     
     clicked = pyqtSignal(dict)
     dropped = pyqtSignal(int, int) # (source, target)
@@ -47,14 +47,14 @@ class DashboardButton(QFrame):
         self._value = ""
         self._drag_start_pos = None
         
-        # Interaction Animation (Click Feedback)
+        # Click feedback animation
         self._content_opacity = 0.0
         self._anim_progress = 0.0
         self.anim = QPropertyAnimation(self, b"anim_progress")
         self.anim.setDuration(1500) # Slower, more elegant
         self.anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
         
-        # Pulse Animation (Script)
+        # Script pulse animation
         self._pulse_opacity = 0.0
         self.pulse_anim = QPropertyAnimation(self, b"pulse_opacity")
         self.pulse_anim.setDuration(2000)
@@ -175,7 +175,30 @@ class DashboardButton(QFrame):
         if btn_type == 'widget':
             # Show sensor value (no icon font, regular font)
             self.value_label.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
-            self.value_label.setText(self._value or "--")
+            
+            val = self._value
+            if val is not None:
+                # Precision Formatting (Default to 1 if not set)
+                precision = self.config.get('precision', 1)
+                
+                try:
+                    import re
+                    # Extract number and unit (e.g., "21.5" and "°C")
+                    match = re.match(r"([+-]?\d*\.?\d+)(.*)", str(val))
+                    if match:
+                        num_str, unit_str = match.groups()
+                        f_val = float(num_str)
+                        
+                        if precision == 0:
+                            formatted_num = f"{f_val:.0f}"
+                        else:
+                            formatted_num = f"{f_val:.{precision}f}"
+                            
+                        val = f"{formatted_num}{unit_str}"
+                except (ValueError, TypeError):
+                    pass # Keep original string if parsing fails
+                        
+            self.value_label.setText(val or "--")
             self.name_label.setText(label)
             self.setProperty("type", "widget")
         elif btn_type == 'climate':
@@ -199,7 +222,16 @@ class DashboardButton(QFrame):
             self.value_label.setFont(get_mdi_font(26))
             self.value_label.setText(icon_char if icon_char else Icons.SCRIPT)
             self.name_label.setText(label)
+            self.name_label.setText(label)
             self.setProperty("type", "script")
+        elif btn_type == 'scene':
+            # Show scene icon
+            self.value_label.setFont(get_mdi_font(26))
+            # Use specific default if no icon configured, otherwise use resolved icon
+            default_icon = Icons.SCENE_THEME
+            self.value_label.setText(get_icon(custom_icon) if custom_icon else default_icon)
+            self.name_label.setText(label)
+            self.setProperty("type", "scene")
         else:
             # Show switch/light icon (MDI lightbulb)
             self.value_label.setFont(get_mdi_font(26))
@@ -284,7 +316,8 @@ class DashboardButton(QFrame):
                 }}
                 /* Beefier font for Icons (Switch/Light/Script) */
                 DashboardButton[type="switch"] QLabel#valueLabel,
-                DashboardButton[type="script"] QLabel#valueLabel {{
+                DashboardButton[type="script"] QLabel#valueLabel,
+                DashboardButton[type="scene"] QLabel#valueLabel {{
                      color: {icon_color};
                      font-weight: 400; 
                      font-size: 26px; /* Significantly larger icon */
@@ -324,7 +357,8 @@ class DashboardButton(QFrame):
                     font-family: "{font_main}"; font-size: {font_size_val}; font-weight: {font_weight_val};
                 }}
                 DashboardButton[type="switch"] QLabel#valueLabel,
-                DashboardButton[type="script"] QLabel#valueLabel {{
+                DashboardButton[type="script"] QLabel#valueLabel,
+                DashboardButton[type="scene"] QLabel#valueLabel {{
                      font-weight: 400; 
                      font-size: 26px; /* Significantly larger icon */
                 }}
@@ -435,12 +469,12 @@ class DashboardButton(QFrame):
         
         btn_type = self.config.get('type', 'switch')
         
-        # Use mapToGlobal to get absolute screen coordinates
+        # Get absolute coordinates
         global_pos = self.mapToGlobal(QPoint(0,0))
         rect = QRect(global_pos, self.size())
         
         if btn_type == 'switch':
-            # Long press on light -> Dimmer
+            # Lights show dimmer overlay
             self._ignore_release = True
             self.dimmer_requested.emit(self.slot, rect)
         elif btn_type == 'curtain':
@@ -453,7 +487,7 @@ class DashboardButton(QFrame):
             self.climate_requested.emit(self.slot, rect)
             
     def mousePressEvent(self, event):
-        """Handle mouse click start."""
+        """Track click start."""
         if event.button() == Qt.MouseButton.LeftButton:
             self._drag_start_pos = event.pos()
             self._ignore_release = False
@@ -520,8 +554,8 @@ class DashboardButton(QFrame):
         if self._drag_start_pos and event.button() == Qt.MouseButton.LeftButton:
              self.trigger_feedback() # Show feedback BEFORE emit
              
-             # Script: Trigger pulse animation
-             if self.config and self.config.get('type') == 'script':
+             # Script/Scene: Trigger pulse animation
+             if self.config and self.config.get('type') in ['script', 'scene']:
                  self.pulse_anim.stop()
                  self.pulse_anim.start()
              
@@ -587,13 +621,33 @@ class DashboardButton(QFrame):
         
         menu.exec(self.mapToGlobal(pos))
 
+    def simulate_click(self):
+        """Programmatically trigger a click."""
+        if not self.config:
+            return
+
+        self.trigger_feedback()
+        
+        # Script/Scene: Trigger pulse animation
+        if self.config.get('type') in ['script', 'scene']:
+             self.pulse_anim.stop()
+             self.pulse_anim.start()
+        
+        # Climate widgets open overlay
+        if self.config.get('type') == 'climate':
+             global_pos = self.mapToGlobal(QPoint(0,0))
+             rect = QRect(global_pos, self.size())
+             self.climate_requested.emit(self.slot, rect)
+        else:
+             self.clicked.emit(self.config)
+
 
 
 from PyQt6.QtGui import QPainterPath
 
 class DimmerOverlay(QWidget):
     """
-    A floating overlay that morphs from a button and acts as a slider.
+    Overlay slider that morphs from a button.
     """
     value_changed = pyqtSignal(int)      # 0-100
     finished = pyqtSignal()
@@ -602,7 +656,7 @@ class DimmerOverlay(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
-        # We need this to draw on top of everything
+        # Raise to draw on top of other widgets
         self.raise_()
         self.hide()
         
@@ -833,8 +887,8 @@ class DimmerOverlay(QWidget):
 
 class ClimateOverlay(QWidget):
     """
-    A floating overlay for climate control with +/- buttons.
-    Unlike DimmerOverlay, this stays open until user clicks X.
+    Overlay for climate control with +/- buttons.
+    Stays open until explicitly closed.
     """
     value_changed = pyqtSignal(float)     # Temperature value
     mode_changed = pyqtSignal(str)        # HVAC mode
@@ -939,11 +993,10 @@ class ClimateOverlay(QWidget):
         self._advanced_mode = advanced_mode
         
         if advanced_mode:
-            # Expand height to cover exactly 2 rows
-            # Grid: 2 rows * 80px + 8px spacing = 168px
+            # Expand height to cover two rows (168px)
             new_h = 168 
             
-            # Align top with start_geo top (Expand Down default)
+            # Align top with start_geo top
             self._target_geom.setHeight(new_h)
             self._target_geom.moveTop(start_geo.top())
             
@@ -1344,10 +1397,12 @@ class Dashboard(QWidget):
     # Signal for when settings button is clicked
     settings_clicked = pyqtSignal()
     
-    def __init__(self, config: dict, theme_manager=None, rows: int = 2, parent=None):
+    def __init__(self, config: dict, theme_manager=None, input_manager=None, version: str = "Unknown", rows: int = 2, parent=None):
         super().__init__(parent)
         self.config = config
         self.theme_manager = theme_manager
+        self.input_manager = input_manager
+        self.version = version
         self._rows = rows
         self.buttons: list[DashboardButton] = []
         self._button_configs: list[dict] = []
@@ -1748,6 +1803,149 @@ class Dashboard(QWidget):
             """
             self.btn_left.setStyleSheet(btn_style)
             self.btn_settings.setStyleSheet(btn_style)
+
+    def keyPressEvent(self, event):
+        """Handle keyboard shortcuts."""
+        # print(f"DEBUG: KeyPress {event.key()} Mods: {event.modifiers()}")
+        
+        # 1. Custom Shortcuts (Highest Priority)
+        for button in self.buttons:
+            sc = button.config.get('custom_shortcut', {})
+            if sc.get('enabled') and sc.get('value'):
+                if self.matches_pynput_shortcut(event, sc.get('value')):
+                    # print(f"DEBUG: Triggering custom shortcut match for button {button.slot}")
+                    button.simulate_click()
+                    event.accept()
+                    return
+
+        # 2. Global Shortcuts (Modifier + Number)
+        # Check modifier
+        modifier_map = {
+            'Alt': Qt.KeyboardModifier.AltModifier,
+            'Ctrl': Qt.KeyboardModifier.ControlModifier,
+            'Shift': Qt.KeyboardModifier.ShiftModifier
+        }
+        
+        shortcut_config = self.config.get('shortcut', {}) if self.config else {}
+        target_mod_str = shortcut_config.get('modifier', 'Alt')
+        
+        should_process = False
+        if target_mod_str == 'None':
+             # Only process if NO modifiers are pressed to perfectly match 'None'
+             if event.modifiers() == Qt.KeyboardModifier.NoModifier:
+                 should_process = True
+        else:
+            target_mod = modifier_map.get(target_mod_str)
+            # Strict match? Or just "contains"?
+            # User wants "Alt+1". If I press "Ctrl+Alt+1", shoud it work? 
+            # Usually strict is better to avoid conflict with complex global shortcuts.
+            # But the original code was: (event.modifiers() & target_mod)
+            # This allows extra modifiers.
+            if target_mod and (event.modifiers() & target_mod):
+                should_process = True
+        
+        if should_process:
+            key = event.key()
+            if Qt.Key.Key_1 <= key <= Qt.Key.Key_9:
+                slot = key - Qt.Key.Key_1
+                if 0 <= slot < len(self.buttons):
+                    # Check if this button has custom shortcut enabled
+                    # If so, GLOBAL shortcut should be ignored for THIS button
+                    btn = self.buttons[slot]
+                    sc = btn.config.get('custom_shortcut', {})
+                    if sc.get('enabled'):
+                        # print(f"DEBUG: Ignoring global shortcut for button {slot} due to custom override")
+                        pass 
+                    else:
+                        btn.simulate_click()
+                        event.accept()
+                        return
+
+        super().keyPressEvent(event)
+        
+    def matches_pynput_shortcut(self, event, shortcut_str: str) -> bool:
+        """Check if QKeyEvent matches pynput shortcut string."""
+        if not shortcut_str: return False
+        
+        parts = shortcut_str.split('+')
+        
+        # Check modifiers
+        has_ctrl = '<ctrl>' in parts
+        has_alt = '<alt>' in parts
+        has_shift = '<shift>' in parts
+        # has_cmd/win ignored for simplicity or added if needed
+        
+        modifiers = event.modifiers()
+        
+        if has_ctrl != bool(modifiers & Qt.KeyboardModifier.ControlModifier): return False
+        if has_alt != bool(modifiers & Qt.KeyboardModifier.AltModifier): return False
+        if has_shift != bool(modifiers & Qt.KeyboardModifier.ShiftModifier): return False
+        
+        # Check key
+        # Extract the non-modifier part
+        target_key = None
+        for p in parts:
+            if p not in ['<ctrl>', '<alt>', '<shift>', '<cmd>']:
+                target_key = p
+                break
+        
+        if not target_key: return False # Modifier only?
+        
+        # Normalize target_key (pynput format) vs event
+        # pynput: 'a', '1', '<esc>', '<space>', '<f1>'
+        
+        # Handle special keys
+        key = event.key()
+        text = event.text().lower()
+        
+        # 1. Single character match (letters, numbers)
+        if len(target_key) == 1:
+            # Prefer text() match for characters to handle layouts, 
+            # BUT text() might be empty if modifiers are held (e.g. Ctrl+A might give \x01)
+            # So fallback to Key code mapping if needed.
+            
+            # Simple check:
+            if text and text == target_key: return True
+            
+            # Fallback: Check key code for letters/digits if text is control char
+            if key >= 32 and key <= 126: # Ascii range roughly
+                try:
+                    # Qt Key to char
+                    if chr(key).lower() == target_key: return True
+                except: pass
+                
+            return False
+
+        # 2. Special keys (<esc>, <f1>, etc)
+        # Strip <>
+        if target_key.startswith('<') and target_key.endswith('>'):
+            clean_key = target_key[1:-1].lower()
+            
+            # Map common keys
+            map_special = {
+                'esc': Qt.Key.Key_Escape,
+                'space': Qt.Key.Key_Space,
+                'enter': Qt.Key.Key_Return,
+                'backspace': Qt.Key.Key_Backspace,
+                'tab': Qt.Key.Key_Tab,
+                'up': Qt.Key.Key_Up,
+                'down': Qt.Key.Key_Down,
+                'left': Qt.Key.Key_Left,
+                'right': Qt.Key.Key_Right,
+                'f1': Qt.Key.Key_F1, 'f2': Qt.Key.Key_F2, 'f3': Qt.Key.Key_F3, 'f4': Qt.Key.Key_F4,
+                'f5': Qt.Key.Key_F5, 'f6': Qt.Key.Key_F6, 'f7': Qt.Key.Key_F7, 'f8': Qt.Key.Key_F8,
+                'f9': Qt.Key.Key_F9, 'f10': Qt.Key.Key_F10, 'f11': Qt.Key.Key_F11, 'f12': Qt.Key.Key_F12,
+                'delete': Qt.Key.Key_Delete,
+                'home': Qt.Key.Key_Home,
+                'end': Qt.Key.Key_End,
+                'page_up': Qt.Key.Key_PageUp,
+                'page_down': Qt.Key.Key_PageDown
+            }
+            
+            if map_special.get(clean_key) == key:
+                return True
+                
+        return False
     
     def set_buttons(self, configs: list[dict], appearance_config: dict = None):
         """Set button configurations."""
@@ -2371,10 +2569,10 @@ class Dashboard(QWidget):
         self._settings_config = config
         self._settings_input_manager = input_manager
         
-        # IMPORT V2
-        from settings_widget_v2 import SettingsWidgetV2
+        # IMPORT Settings Widget
+        from settings_widget import SettingsWidget
         
-        self.settings_widget = SettingsWidgetV2(config, self.theme_manager, input_manager, self)
+        self.settings_widget = SettingsWidget(config, self.theme_manager, input_manager, self.version, self)
         self.settings_widget.back_requested.connect(self.hide_settings)
         self.settings_widget.settings_saved.connect(self._on_settings_saved)
         
@@ -2402,7 +2600,7 @@ class Dashboard(QWidget):
         try:
             from button_edit_widget import ButtonEditWidget
             # Create a placeholder instance to be ready
-            self.edit_widget = ButtonEditWidget([], theme_manager=self.theme_manager, parent=self)
+            self.edit_widget = ButtonEditWidget([], theme_manager=self.theme_manager, input_manager=self.input_manager, parent=self)
             self.edit_widget.saved.connect(self._on_edit_saved)
             self.edit_widget.cancelled.connect(self._on_edit_cancelled)
             

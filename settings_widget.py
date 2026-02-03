@@ -1,6 +1,6 @@
 
 """
-Rewritten Settings Widget (V2)
+Settings Widget
 Clean, minimalist, and bug-free implementation of the Settings panel.
 """
 
@@ -14,19 +14,24 @@ from PyQt6.QtCore import Qt, pyqtSignal, pyqtProperty, pyqtSlot, QUrl
 from PyQt6.QtGui import QFont, QColor, QDesktopServices
 
 from worker_threads import ConnectionTestThread
+from update_checker import UpdateCheckerThread
 
-class SettingsWidgetV2(QWidget):
+class SettingsWidget(QWidget):
     """
-    Rewritten Settings Widget.
-    Uses QFormLayout for clean alignment and robust sizing.
+    Main settings screen.
+    Uses QFormLayout for clean alignment of labels and fields.
     """
     
     settings_saved = pyqtSignal(dict)
     back_requested = pyqtSignal()
     
-    def __init__(self, config: dict, theme_manager=None, input_manager=None, parent=None):
+    settings_saved = pyqtSignal(dict)
+    back_requested = pyqtSignal()
+    
+    def __init__(self, config: dict, theme_manager=None, input_manager=None, current_version="0.0.0", parent=None):
         super().__init__(parent)
         self.config = config
+        self.current_version = current_version
         self.theme_manager = theme_manager
         self.input_manager = input_manager
         
@@ -58,7 +63,7 @@ class SettingsWidgetV2(QWidget):
     opacity = pyqtProperty(float, get_opacity, set_opacity)
     
     def _update_stylesheet(self):
-        """Generate and apply theme-aware stylesheet."""
+        """Build and apply theme-dependent stylesheet."""
         if self.theme_manager:
             colors = self.theme_manager.get_colors()
         else:
@@ -203,18 +208,33 @@ class SettingsWidgetV2(QWidget):
             QPushButton#coffeeBtn:hover {{
                 background-color: #006ce6;
             }}
+            QPushButton#coffeeBtn:hover {{
+                background-color: #006ce6;
+            }}
+            
+            QPushButton#updateBtn {{
+                background-color: {colors['button']};
+                border: 1px solid {colors['border']};
+                border-radius: 6px;
+                padding: 6px 12px;
+            }}
+            QPushButton#updateBtn:hover {{
+                background-color: {colors['accent']};
+                color: white;
+                border-color: {colors['accent']};
+            }}
         """)
         
     def setup_ui(self):
+        # Apply dynamic theming
+        self._update_stylesheet()
+        
         # Main Layout
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(10)
         
-        # Apply dynamic theming
-        self._update_stylesheet()
-        
-        # Connect theme changes for live updates
+        # Listen for theme changes
         if self.theme_manager:
             self.theme_manager.theme_changed.connect(self._update_stylesheet)
         
@@ -313,6 +333,12 @@ class SettingsWidgetV2(QWidget):
         
         # --- Shortcut Section ---
         self._add_section_header("SHORTCUT")
+
+        # Modifier
+        self.modifier_combo = QComboBox()
+        self.modifier_combo.addItems(["None", "Alt", "Ctrl", "Shift"])
+        self.modifier_combo.setFixedWidth(120)
+        self.form.addRow("Modifier:", self.modifier_combo)
         
         shortcut_row = QHBoxLayout()
         self.shortcut_display = QLineEdit()
@@ -343,12 +369,36 @@ class SettingsWidgetV2(QWidget):
         shortcut_row.addWidget(self.record_btn)
         shortcut_row.addStretch(2) 
         
-        self.form.addRow("Show/Hide:", shortcut_row)
+        self.form.addRow("App Toggle:", shortcut_row)
+        
+        if self.theme_manager:
+            self.theme_manager.theme_changed.connect(self._update_stylesheet)
+        
+        # ... (Previous code)
         
         layout.addLayout(self.form)
         
         # --- Support Section ---
         self._add_section_header("SUPPORT")
+        
+        # Update Check
+        update_row = QHBoxLayout()
+        update_row.setContentsMargins(0, 0, 0, 0)
+        
+        self.update_btn = QPushButton("Check for Updates")
+        self.update_btn.setObjectName("updateBtn")
+        self.update_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.update_btn.clicked.connect(self.check_for_updates)
+        
+        self.update_label = QLabel(f"v{self.current_version}")
+        self.update_label.setStyleSheet("color: #aaa; font-size: 11px;")
+        
+        update_row.addWidget(self.update_btn)
+        update_row.addSpacing(10)
+        update_row.addWidget(self.update_label)
+        update_row.addStretch()
+        
+        self.form.addRow("Update:", update_row)
         
         self.coffee_btn = QPushButton("Buy me a coffee ☕")
         self.coffee_btn.setObjectName("coffeeBtn")
@@ -373,7 +423,10 @@ class SettingsWidgetV2(QWidget):
         self.form.addRow(lbl)
 
     def get_content_height(self):
-        """Return suggested height."""
+        """
+        Calculate the exact height needed to show all settings without scrolling.
+        Used by the Dashboard to resize the window appropriately when switching views.
+        """
         # Force layout update to get accurate size
         self.adjustSize()
         return self.sizeHint().height()
@@ -403,6 +456,7 @@ class SettingsWidgetV2(QWidget):
         self.live_dimming_check.setChecked(app.get('live_dimming', True))
         
         sc = self.config.get('shortcut', {})
+        self.modifier_combo.setCurrentText(sc.get('modifier', 'Alt'))
         self.shortcut_display.setText(sc.get('value', ''))
         
     def save_settings(self):
@@ -426,6 +480,8 @@ class SettingsWidgetV2(QWidget):
         
         # Shortcut handled by record signal, but good to ensure consistency
         # (Shortcut saves immediately on record in config dict)
+        if 'shortcut' not in self.config: self.config['shortcut'] = {}
+        self.config['shortcut']['modifier'] = self.modifier_combo.currentText()
         
         self.settings_saved.emit(self.config)
 
@@ -463,6 +519,9 @@ class SettingsWidgetV2(QWidget):
 
     @pyqtSlot(dict)
     def on_shortcut_recorded(self, shortcut):
+        if not self.record_btn.isChecked():
+            return
+            
         self.record_btn.setChecked(False)
         # Reset Icon
         self.record_icon.setStyleSheet("background-color: white; border-radius: 6px;")
@@ -484,6 +543,7 @@ class SettingsWidgetV2(QWidget):
         if self._test_thread and self._test_thread.isRunning():
             self._test_thread.quit()
         
+        # Run connection check in background to avoid freezing UI
         self._test_thread = ConnectionTestThread(url, token)
         self._test_thread.finished.connect(self.on_test_complete)
         self._test_thread.start()
@@ -495,6 +555,42 @@ class SettingsWidgetV2(QWidget):
         # Truncate long error messages
         display_msg = message[:30] + "..." if len(message) > 30 else message
         self.status_label.setText(f"{icon} {display_msg}")
+
+        self.status_label.setText(f"{icon} {display_msg}")
+
+    def check_for_updates(self):
+        """Start update check."""
+        self.update_btn.setEnabled(False)
+        self.update_label.setText("Checking...")
+        
+        self._update_thread = UpdateCheckerThread(self.current_version)
+        self._update_thread.update_available.connect(self.on_update_available)
+        self._update_thread.up_to_date.connect(self.on_up_to_date)
+        self._update_thread.error_occurred.connect(self.on_update_error)
+        self._update_thread.start()
+        
+    @pyqtSlot(str)
+    def on_update_available(self, tag):
+        self.update_btn.setEnabled(True)
+        self.update_label.setText(f"Update available: {tag}")
+        self.update_label.setStyleSheet("color: #34A853; font-weight: bold; font-size: 11px;")
+        
+        # Optionally change button text to "Download"
+        self.update_btn.setText("Download Update")
+        self.update_btn.disconnect()
+        self.update_btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://github.com/lasselian/Prism-Desktop/releases/latest")))
+        
+    @pyqtSlot()
+    def on_up_to_date(self):
+        self.update_btn.setEnabled(True)
+        self.update_label.setText("App is up to date")
+        self.update_label.setStyleSheet("color: #aaa; font-size: 11px;")
+        
+    @pyqtSlot(str)
+    def on_update_error(self, error):
+        self.update_btn.setEnabled(True)
+        self.update_label.setText("Check failed")
+        self.update_label.setToolTip(error)
 
     def _cleanup_threads(self):
         if self._test_thread and self._test_thread.isRunning():
