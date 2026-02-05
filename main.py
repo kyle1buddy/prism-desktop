@@ -9,7 +9,13 @@ import time
 from pathlib import Path
 from typing import Optional
 
+
 from utils import get_config_path
+import keyring
+import copy
+
+SERVICE_NAME = "PrismDesktop"
+KEY_TOKEN = "ha_token"
 
 from PyQt6.QtWidgets import QApplication, QSystemTrayIcon
 from PyQt6.QtCore import QObject, pyqtSignal, QTimer, pyqtSlot, QThread, QThreadPool, QRunnable
@@ -89,6 +95,7 @@ class PrismDesktopApp(QObject):
         # Configuration
         self.config_path = get_config_path("config.json")
         self.config = self.load_config()
+        self.save_config() # Scrub sensitive data (tokens) from disk immediately
         
         # Components
         self.theme_manager = ThemeManager()
@@ -137,7 +144,35 @@ class PrismDesktopApp(QObject):
         if self.config_path.exists():
             try:
                 with open(self.config_path, 'r', encoding='utf-8') as f:
-                    return json.load(f)
+                    config = json.load(f)
+                    
+                    # --- Keyring Migration & Loading ---
+                    ha_config = config.get('home_assistant', {})
+                    token_in_file = ha_config.get('token', '')
+                    
+                    # 1. Try to load from keyring
+                    token_from_keyring = None
+                    try:
+                        token_from_keyring = keyring.get_password(SERVICE_NAME, KEY_TOKEN)
+                    except Exception as e:
+                        print(f"Keyring read error: {e}")
+                    
+                    if token_from_keyring:
+                        # Case A: Keyring has token -> Use it (ignoring file)
+                        ha_config['token'] = token_from_keyring
+                    elif token_in_file:
+                        # Case B: Keyring Empty, File has token -> Migrate
+                        print("Migrating token to keyring...")
+                        try:
+                            keyring.set_password(SERVICE_NAME, KEY_TOKEN, token_in_file)
+                            # Verify it saved?
+                            if keyring.get_password(SERVICE_NAME, KEY_TOKEN) == token_in_file:
+                                print("Migration successful. Token will be removed from file on save.")
+                        except Exception as e:
+                            print(f"Migration failed: {e}")
+                            # Keep token in config object so app works, but it remains in file for now.
+                    
+                    return config
             except Exception as e:
                 print(f"Error loading config: {e}")
         
@@ -151,8 +186,29 @@ class PrismDesktopApp(QObject):
     def save_config(self):
         """Save configuration to file."""
         try:
+            # Create a deep copy to modify for saving
+            config_to_save = copy.deepcopy(self.config)
+            
+            # Extract token
+            ha_config = config_to_save.get('home_assistant', {})
+            token = ha_config.get('token', '')
+            
+            if token:
+                # Save to keyring
+                try:
+                    keyring.set_password(SERVICE_NAME, KEY_TOKEN, token)
+                    # Remove from file payload
+                    ha_config['token'] = '' 
+                except Exception as e:
+                    print(f"Keyring write error: {e}")
+                    # If keyring fails, we might fall back to saving plaintext?
+                    # For now, let's keep it in file if keyring fails, 
+                    # BUT ideally we shouldn't.
+                    # Decision: If keyring fails, we leave it in 'token' field so user can still use app.
+                    pass
+            
             with open(self.config_path, 'w', encoding='utf-8') as f:
-                json.dump(self.config, f, indent=2)
+                json.dump(config_to_save, f, indent=2)
         except Exception as e:
             print(f"Error saving config: {e}")
     
