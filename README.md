@@ -12,6 +12,7 @@ I built this because I wanted a faster, more elegant way to control my smart hom
 ## Features
 
 - **System Tray Integration**: The app stays tucked away in your tray until you need it.
+- **PC notifications**: Send notifications to your PC via persistent_notification.create
 - **Morphing Controls**: Click and hold widgets to expand them into granular controls like dimmers or thermostats.
 - **Drag & Drop Customization**: Rearrange your dashboard grid simply by dragging icons around.
 - **Real-time Sync**: Uses Home Assistant's WebSocket API for instant state updates.
